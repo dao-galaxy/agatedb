@@ -87,11 +87,7 @@ impl Transaction {
         let mut entries: Vec<_> = self.pending_writes.values().cloned().collect();
         entries.sort_by(|x, y| {
             let cmp = COMPARATOR.compare_key(&x.key, &y.key);
-            if reversed {
-                cmp.reverse()
-            } else {
-                cmp
-            }
+            if reversed { cmp.reverse() } else { cmp }
         });
 
         Some(PendingWritesIterator::new(self.read_ts, reversed, entries))
@@ -526,12 +522,12 @@ impl Agate {
     }
 
     /// Executes a function creating and managing a read-only transaction for the user.
-    /// If `view` is used with managed transactions, it would assume a read timestamp of `std::u64::MAX`.
+    /// If `view` is used with managed transactions, it would assume a read timestamp of `u64::MAX`.
     pub fn view(&self, f: impl FnOnce(&mut Transaction) -> Result<()>) -> Result<()> {
         // TODO: Check closed.
 
         let mut txn = if self.core.opts.managed_txns {
-            self.new_transaction_at(std::u64::MAX, false)
+            self.new_transaction_at(u64::MAX, false)
         } else {
             self.new_transaction(false)
         };

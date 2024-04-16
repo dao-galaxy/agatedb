@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use bytes::{Bytes, BytesMut};
-use tempdir::TempDir;
 use tempfile::tempdir;
 
 use super::*;
@@ -51,7 +50,7 @@ fn test_ensure_room_for_write() {
     let mut opts = AgateOptions::default();
     let tmp_dir = tempdir().unwrap();
     opts.dir = tmp_dir.path().to_path_buf();
-    opts.value_dir = opts.dir.clone();
+    opts.value_dir.clone_from(&opts.dir);
 
     // Wal::zero_next_entry will need MAX_HEADER_SIZE bytes free space.
     // So we should put bytes more than value_log_file_size but less than
@@ -119,13 +118,12 @@ pub fn run_agate_test<F>(opts: Option<AgateOptions>, test_fn: F)
 where
     F: FnOnce(Arc<Agate>),
 {
-    let tmp_dir = TempDir::new("agatedb").unwrap();
+    let tmp_dir = tempfile::Builder::new()
+        .prefix("agatedb")
+        .tempdir()
+        .unwrap();
 
-    let mut opts = if let Some(opts) = opts {
-        opts
-    } else {
-        AgateOptions::default()
-    };
+    let mut opts = opts.unwrap_or_default();
 
     if !opts.in_memory {
         opts.dir = tmp_dir.as_ref().to_path_buf();

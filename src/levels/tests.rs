@@ -1,7 +1,4 @@
-use std::fs;
-
 use lazy_static::lazy_static;
-use tempdir::TempDir;
 use yatp::{task::callback::TaskCell, ThreadPool};
 
 use super::*;
@@ -38,14 +35,14 @@ where
     let (tx, rx) = std::sync::mpsc::channel();
 
     let handle = std::thread::spawn(move || {
-        let tmp_dir = TempDir::new("agatedb").unwrap().as_ref().to_path_buf();
-        // TODO: why not exist?
-        if !tmp_dir.exists() {
-            fs::create_dir_all(tmp_dir.as_path()).unwrap();
-        };
-        helper_dump_dir(tmp_dir.as_path());
-        opts.dir = tmp_dir.clone();
-        opts.value_dir = tmp_dir.clone();
+        let tmp_dir = tempfile::Builder::new()
+            .prefix("agatedb")
+            .tempdir()
+            .unwrap();
+        let tmp_dir_path = tmp_dir.as_ref().to_path_buf();
+        helper_dump_dir(tmp_dir_path.as_path());
+        opts.dir.clone_from(&tmp_dir_path);
+        opts.value_dir.clone_from(&tmp_dir_path);
 
         let manifest = Arc::new(ManifestFile::open_or_create_manifest_file(&opts).unwrap());
         let orc = Arc::new(Oracle::new(&opts));
@@ -55,11 +52,11 @@ where
         f(&mut lvctl);
 
         println!("--- Agate directory ---");
-        helper_dump_dir(tmp_dir.as_path());
+        helper_dump_dir(tmp_dir_path.as_path());
         dump_levels(&lvctl);
         drop(lvctl);
         println!("--- after close ---");
-        helper_dump_dir(tmp_dir.as_path());
+        helper_dump_dir(tmp_dir_path.as_path());
         tx.send(()).expect("failed to complete test");
     });
 
@@ -172,16 +169,12 @@ fn generate_test_compect_def(
         cpt_prio,
         targets,
     );
-    compact_def.top = lvctl.inner.levels[this_level_id]
-        .read()
-        .unwrap()
-        .tables
-        .clone();
-    compact_def.bot = lvctl.inner.levels[next_level_id]
-        .read()
-        .unwrap()
-        .tables
-        .clone();
+    compact_def
+        .top
+        .clone_from(&lvctl.inner.levels[this_level_id].read().unwrap().tables);
+    compact_def
+        .bot
+        .clone_from(&lvctl.inner.levels[next_level_id].read().unwrap().tables);
     compact_def.targets.base_level = next_level_id;
     compact_def
 }
@@ -308,7 +301,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 0, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 0, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // foo version 2 should be dropped after compaction.
@@ -348,7 +341,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 0, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 0, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // foo version 3 (both) should be dropped after compaction.
@@ -392,7 +385,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 0, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 0, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // foo version 2 and version 1 should be dropped after compaction.
@@ -431,7 +424,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 1, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 1, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // foo version 2 should be dropped after compaction.
@@ -472,7 +465,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 1, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 1, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // foo version 2 should be dropped after compaction. fooz version 1 will remain because overlap
@@ -490,7 +483,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 2, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 2, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // Everything should be removed now.
@@ -526,7 +519,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 1, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 1, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // The top table at Level 1 doesn't overlap Level 3, but the bottom table at Level 2
@@ -569,7 +562,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 1, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 1, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // foo version 2 should be dropped after compaction.
@@ -612,7 +605,7 @@ mod compaction {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 1, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 1, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // C should be dropped after compaction.
@@ -669,7 +662,7 @@ mod compaction_two_versions {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 1, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 1, &mut compact_def, POOL.clone())
                 .unwrap();
 
             // Nothing should be dropped after compaction because number of versions to keep is 2.
@@ -687,7 +680,7 @@ mod compaction_two_versions {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 2, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 2, &mut compact_def, POOL.clone())
                 .unwrap();
 
             get_all_and_check(
@@ -706,7 +699,7 @@ mod compaction_all_versions {
         let mut options = generate_test_agate_options();
         // Disable compaction.
         options.num_compactors = 0;
-        options.num_versions_to_keep = std::usize::MAX;
+        options.num_versions_to_keep = usize::MAX;
 
         options
     }
@@ -736,7 +729,7 @@ mod compaction_all_versions {
             let mut compact_def = generate_test_compect_def(lvctl, 1, 2);
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 1, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 1, &mut compact_def, POOL.clone())
                 .unwrap();
 
             get_all_and_check(
@@ -752,7 +745,7 @@ mod compaction_all_versions {
             let mut compact_def = generate_test_compect_def(lvctl, 2, 3);
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 2, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 2, &mut compact_def, POOL.clone())
                 .unwrap();
 
             get_all_and_check(
@@ -791,7 +784,7 @@ mod compaction_all_versions {
             let mut compact_def = generate_test_compect_def(lvctl, 1, 2);
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 1, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 1, &mut compact_def, POOL.clone())
                 .unwrap();
 
             get_all_and_check(lvctl, vec![kv!("fooo", "barr", 2, 0)]);
@@ -838,7 +831,7 @@ mod discard_ts {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 0, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 0, &mut compact_def, POOL.clone())
                 .unwrap();
 
             get_all_and_check(
@@ -884,7 +877,7 @@ mod discard_ts {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 0, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 0, &mut compact_def, POOL.clone())
                 .unwrap();
 
             get_all_and_check(
@@ -925,7 +918,7 @@ mod discard_ts {
 
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 0, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 0, &mut compact_def, POOL.clone())
                 .unwrap();
 
             get_all_and_check(
@@ -945,7 +938,7 @@ mod miscellaneous {
         let mut options = generate_test_agate_options();
         // Disable compaction.
         options.num_compactors = 0;
-        options.num_versions_to_keep = std::usize::MAX;
+        options.num_versions_to_keep = usize::MAX;
 
         lvctl_test_with_opts(options, |lvctl| {
             let l0 = vec![kv!("foo", "bar", 1, 0)];
@@ -967,7 +960,7 @@ mod miscellaneous {
             let mut compact_def = generate_test_compect_def(lvctl, 0, 1);
             lvctl
                 .inner
-                .run_compact_def(std::usize::MAX, 0, &mut compact_def, POOL.clone())
+                .run_compact_def(usize::MAX, 0, &mut compact_def, POOL.clone())
                 .unwrap();
 
             get_all_and_check(
